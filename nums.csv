@@ -1,3 +1,3 @@
-col1,col2,col3,price
-one,two,three,1
-four,fiv,six,30
+col1,col2,col3,price,value
+one,two,three,1,12
+four,fiv,six,30,20

@@ -2,6 +2,94 @@
 # -*- coding: utf-8 -*-
 
 from dfply import *
-
 from utils import data_from_stdin
+import argparse
+from sys import exit
 
+parser = parser = argparse.ArgumentParser(description = 'Parse dataframe using the dfply library. https://github.com/kieferk/dfply')
+parser.add_argument('-c', '--columns', help = 'Columns to keep, as a comma separated list')
+parser.add_argument('-r', '--remove', help = 'Columns to remove, as a comma separated list')
+parser.add_argument('-f', '--filter', help = 'Filter dataframe according to this expression. Must be a string',type = str)
+parser.add_argument('-m', '--mutate', help = 'Create new columns.', type = str)
+
+args = parser.parse_args()
+
+def columns(df, args):
+    """
+    Return dataframe containing only columns in args.columns
+    """
+    cols = args.columns.split(',')
+    cols = [f"X['{col}']" for col in cols]
+    cols = ', '.join(cols)   
+    return df >> select(eval(cols))
+
+def remove_columns(df, args):
+    """
+    Return dataframe without columns in args.remove
+    """
+    rm = args.remove.split(',')
+    cols = [f"X['{col}']" for col in df.columns if col not in rm]
+    cols = ', '.join(cols)   
+    return df >> select(eval(cols))
+
+def filter_df(df, args):
+    """
+    Return dataframe filtered by the expression in args.filter.
+    Works with multiple expressions.
+    """
+    expr = args.filter.split(',')
+    for exp in expr:
+        exp = exp.split()
+        # -f 'item in col'
+        if exp[1] == 'in':
+            lookup, _,col = exp
+            command = df[col].str.contains(lookup)
+            df = df[command]
+        else:
+            exp = ' '.join(exp)
+            df = df.query(exp) # works for numerical comparisons, not strings
+    return df 
+
+def new_column(df, args):
+    """
+    Adds a new column according to args.mutate.
+    Accepts mutiple arguments by using a comma-separated
+    list.
+    """
+    new_cols = args.mutate.split(',')
+    # name = ....
+    for item in new_cols:
+        item = item.split('=')
+        if len(item) > 2:
+            exit("""\
+ERROR: mutate term.
+Write as new_col = expression.
+i.e.
+    new_col = old_col * 2
+    new_col = col1 * 3 + col5 / 2 + 3
+""")
+        new_col, expr = item
+        
+    return df
+
+def apply_operations(df, args):
+    """
+    Return dataframe after applying operations
+    """
+    user_calls = {args.columns: columns,
+                  args.remove: remove_columns,
+                  args.filter: filter_df,
+                  args.mutate: new_column}
+
+    for k, v in user_calls.items():
+        if k is not None:
+            df = v(df, args)
+    return df
+
+def main():
+    df = data_from_stdin()
+    df = apply_operations(df, args)
+    print(df.to_csv(index = False), end = "") # stdout
+
+if __name__ == '__main__':
+    main()
