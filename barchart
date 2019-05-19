@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# if on local, use python plots- import if necessary, write bash script, pip installing --user
+# if on remote, use gnuplot, or python implementation of ascii plot, again download if needed
+# write manpage
+
+# hostname = subprocess.check_output('HOSTNAME').decode('utf8').strip()
+# if all(('dyn', 'monash') in hostname):
+#   machine = 'local'
+# else:
+#   machine = 'remote'
+
+import warnings
+import subprocess
+from plotnine import *
+import argparse
+from os.path import expanduser
+
+from utils import data_from_stdin
+# import matplotlib.pyplot as plt
+
+parser = argparse.ArgumentParser(description = 'Plot bar chart from command line SYSOUT. Uses the plotnine library, a port of ggplot2 to python.')
+parser.add_argument('-x', '--x', help = 'x value', action = 'store')
+parser.add_argument('-y', '--y', help = 'y value', action = 'store')
+parser.add_argument('-g', '--group', help = 'grouping variable', action = 'store')
+parser.add_argument('-c', '--color', help = 'Optional color scheme', action = 'store')
+parser.add_argument('-f', '--facet', help = "Optional faceting i.e. -f \"'~col1', nrows = 2'\". If nrows present, automatically uses facet_wrap")
+parser.add_argument('-s', '--save', help = 'Optional filename to save graph to', action = 'store', type=str)
+parser.add_argument('-a', '--additional', help = 'Optional additional arguments', action = 'store', nargs = argparse.REMAINDER)
+
+### now additional commonly changed items
+# labels
+parser.add_argument('-l', '--labels', help = 'Optional labels, include as string. i.e. "x = \'name\', y = \'name\'"', action = 'store')
+
+args = parser.parse_args()
+
+# args.additional is one string
+
+def add_additional(plot, args):
+    """
+    Parses a string of plotnine arguments wrapped in double quotes.
+    """
+    if args.additional is not None:
+        addn = args.additional[0].split('+')
+        for add in addn:
+            plot += eval(add.strip())
+    return plot
+
+def add_labels(plot, args):
+    """
+    Add x and y labels to the plot
+    """
+    if args.labels is not None:
+        # create dict to pass to labs()
+        labs_dict = {}
+        labels = args.labels.split(',')
+        for l in labels:
+            l = l.split('=')
+            labs_dict[l[0].strip()] = eval(l[1].strip())
+        plot += labs(**labs_dict)
+    return plot
+
+def add_facet(plot, args):
+    """
+    Adds faceting to the plot.
+    """
+    if args.facet is not None:
+        if 'nrows' in args.facet:
+            plot += facet_wrap(eval(args.facet))
+        else:
+            plot += facet_grid(eval(args.facet))
+    return plot
+
+# font
+import matplotlib.font_manager as fm
+fpath = expanduser('~') + '/Library/Fonts/Ubuntu-R.ttf'
+font = fm.FontProperties(fname=fpath)
+
+### collect data
+
+df = data_from_stdin()
+
+# parse command line arguments
+
+# get color types from color brewer
+# use scale_color_cmap, with name?
+colors = {}
+colors['Dark2'] = 'qual'
+colors['Set2'] = 'qual'
+colors['Category10'] = 'qual'
+colors['Accent'] = 'qual'
+colors['Dark2'] = 'qual'
+colors['Paired'] = 'qual'
+colors['Pastel1'] = 'qual'
+colors['Pastel2'] = 'qual'
+colors['Set1'] = 'qual'
+colors['Set2'] = 'qual'
+colors['Set3'] = 'qual'
+colors['Blues'] = 'seq'
+colors['Greens'] = 'seq'
+colors['Greys'] = 'seq'
+colors['Oranges'] = 'seq'
+colors['Purples'] = 'seq'
+colors['Reds'] = 'seq'
+colors['BuGn'] = 'seq'
+colors['BuPu'] = 'seq'
+colors['GnBu'] = 'seq'
+colors['OrRd'] = 'seq'
+colors['PuBuGn'] = 'seq'
+colors['PuBu'] = 'seq'
+colors['PuRd'] = 'seq'
+colors['RdPu'] = 'seq'
+colors['YlGnBu'] = 'seq'
+colors['YlGn'] = 'seq'
+colors['YlOrBr'] = 'seq'
+colors['YlOrRd'] = 'seq'
+colors['BrBG'] = 'div'
+colors['PRGn'] = 'div'
+colors['PiYG'] = 'div'
+colors['PuOr'] = 'div'
+colors['RdBu'] = 'div'
+colors['RdGy'] = 'div'
+colors['RdYlBu'] = 'div'
+colors['RdYlGn'] = 'div'
+colors['Spectral'] = 'div'
+
+# sort out colors
+
+#create plot
+
+if args.group is None and args.color is None:
+    plot = (
+    ggplot(df) +
+    aes(x = args.x, y = args.y) +
+    theme_seaborn() +
+    theme(text = element_text(fontproperties = font)) +
+    geom_bar(stat = 'identity')
+    )
+
+if args.group is not None and args.color is None:
+    # default colorscheme
+    plot = (
+    ggplot(df) +
+    aes(x = args.x, y = args.y, fill = args.group) +
+    theme_seaborn() +
+    theme(text = element_text(fontproperties = font))+
+    geom_bar(stat = 'identity') +
+    scale_fill_brewer(type = 'qual', palette = 'Dark2')
+    )
+
+elif args.group is None and args.color is not None:
+    # print("Colours are applied to the different groups, but no grouping has been applied.")
+    # print("Defaulting to 'Dark2', see colorbrewer.org")
+    # pass in RGBA values
+    plot = (
+    ggplot(df) +
+    aes(x = args.x, y = args.y) +
+    geom_bar(stat = 'identity', color = args.color) +
+    theme_seaborn() +
+    theme(text = element_text(fontproperties = font))
+    )
+        
+
+elif args.group is not None and args.color is not None:
+    plot = (
+    ggplot(df) +
+    aes(x = args.x, y = args.y, fill = args.group) +
+    geom_bar(stat = 'identity') +
+    theme_seaborn() +
+    theme(text = element_text(fontproperties = font)) +
+    scale_fill_brewer(type = colors[color], palette = color)
+    )
+
+    
+
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore')
+    plot = add_additional(plot, args)
+    plot = add_labels(plot, args)
+    plot = add_facet(plot, args)
+    if args.save is not None:
+        ggplot.save(plot, filename=args.save, dpi=300)
+    else:
+        print(plot)
